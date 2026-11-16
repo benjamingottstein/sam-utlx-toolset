@@ -15,10 +15,11 @@ A Go toolset for [Solace Agent Mesh](https://solace.com/products/agent-mesh/) (S
 | `utlx_convert` | Converts a file between formats without a script, e.g. XML → YAML, CSV → JSON, XSD → JSON Schema / Avro / Protobuf. |
 | `utlx_create_transformer` | Validates a script, test-runs it on a sample input and saves it as `<name>.utlx`. Nothing is saved if validation or the sample run fails, and the errors come back to the agent so it can fix them. |
 | `utlx_functions` | Looks up the stdlib (~700 functions): one function's signature and examples, a keyword search, or a category. |
+| `utlx_map` | **For workflows:** data in, data out. It runs a fixed script on inline data (a JSON value, or XML/CSV/YAML text) or named inputs, and returns the result inline (JSON as an object, other formats as text). No LLM and no artifacts needed. |
 
 A script can be passed as a full UTL-X script (`%utlx 1.0` header) or as just the body. In the second case the tool builds the header from `input_format` / `output_format`. The toolset also injects a short UTL-X cheat sheet into the agent's system prompt.
 
-An example agent, [`agents/data-transformer.yaml`](agents/data-transformer.yaml), uses all four tools.
+An example agent, [`agents/data-transformer.yaml`](agents/data-transformer.yaml), uses the chat tools. An example workflow, [`workflows/order-xml-to-invoice.yaml`](workflows/order-xml-to-invoice.yaml), uses `utlx_map` in a tool node.
 
 ```text
 You: Turn orders.xml into a CSV with one row per order line (order id, sku, qty, line total), ';' as delimiter,
@@ -26,6 +27,55 @@ You: Turn orders.xml into a CSV with one row per order line (order id, sku, qty,
 Agent: utlx_convert (inspect) → utlx_transform → utlx_create_transformer
        → orders-lines.csv + orders-to-lines.utlx
 ```
+
+## Deterministic mapping in a workflow
+
+A workflow `tool` node calls `utlx__utlx_map` with a fixed UTL-X script. No agent and no LLM are involved, so the same input always gives the same output: a classic integration mapping step.
+
+```yaml
+kind: workflow
+name: order-xml-to-invoice
+description: "Maps an order given as XML text into an invoice JSON object."
+spec:
+  appConfig:
+    toolsets: [utlx]                     # registers the tools as utlx__<tool>
+    input_schema:
+      type: object
+      properties: { order_xml: { type: string } }
+      required: [order_xml]
+    nodes:
+      - id: map_order
+        type: tool
+        tool_name: utlx__utlx_map
+        input:
+          data: "{{workflow.input.order_xml}}"   # text, or a JSON object/array
+          input_format: xml
+          output_format: json
+          script: |
+            {
+              invoiceId: "INV-" + $input.Order.@id,
+              customer: $input.Order.Customer,
+              lines: $input.Order.Item |> map(i => {
+                sku: i.@sku,
+                total: parseNumber(i.@qty) * parseNumber(i.@price)
+              })
+            }
+    output_mapping:
+      invoice: "{{map_order.output.output}}"
+```
+
+- **What `{{map_order.output}}` contains:** the whole tool result, `{status, message, output, output_format}`. So `{{map_order.output.output}}` is the mapped value. Downstream nodes can read single fields, e.g. `{{map_order.output.output.invoiceId}}`.
+- **Several inputs:** pass `inputs: {orders: "{{workflow.input.orders}}", customers: "{{a_previous_node.output.output}}"}` and reference them as `$orders` and `$customers`. Set formats per input with `input_formats: {customers: csv}`.
+- **Result as a file too:** add `save_as_artifact: invoice.json` to store the result as an artifact as well.
+- **Writing the script:** build and test it in chat with the `data-transformer` agent (`utlx_create_transformer`), then paste the saved `.utlx` into the node's `script`.
+
+Run it from the CLI. The workflow input goes in as a data part:
+
+```bash
+sam task send "Run" -a order-xml-to-invoice -d '{"order_xml": "<Order id=\"ORD-7\"><Customer>Alice</Customer><Item sku=\"A-1\" qty=\"2\" price=\"9.50\"/></Order>"}'
+```
+
+> **First deploy:** if the toolset was uploaded in the same apply, the workflow deploy can fail with `tool package "utlx" is not ready`, because the toolset is still being discovered. Run the apply again once the toolset shows **Ready**. If the workflow then still shows *not deployed*, deploy it from the **Workflows** page.
 
 ## How it works
 

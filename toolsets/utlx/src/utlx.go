@@ -192,15 +192,16 @@ type namedInput struct {
 
 // buildScript returns a complete script. A script that already starts with
 // %utlx is returned unchanged; a body-only script gets a header built from
-// the given input and output formats.
-func buildScript(script string, inputs []namedInput, inFormat, outFormat string) string {
+// the given input and output formats. named forces the "input: name format"
+// header (referenced as $name) even for a single input.
+func buildScript(script string, inputs []namedInput, named bool, inFormat, outFormat string) string {
 	if hasHeader(script) {
 		return script
 	}
 	var b strings.Builder
 	b.WriteString("%utlx 1.0\n")
 	switch {
-	case len(inputs) > 1:
+	case named || len(inputs) > 1:
 		parts := make([]string, len(inputs))
 		for i, in := range inputs {
 			parts[i] = in.name + " " + in.format

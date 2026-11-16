@@ -74,6 +74,10 @@ func tools() []*sdk.ToolDef {
 			"Look up UTL-X standard library functions: pass function for the signature, parameters and examples of one function; query to search by keyword (e.g. 'date', 'xml', 'group'); category to list a category (e.g. String, Array, Date, XML, CSV); nothing for category statistics.",
 			functions,
 			sdk.WithConfigSchema(cfg...), sdk.WithTimeout(60)),
+		sdk.NewTool("utlx_map",
+			"Map data with a fixed UTL-X script, data in and data out: takes the input inline (a JSON value, or XML/CSV/YAML text) or several named inputs, and returns the result inline (JSON as an object, other formats as text). Built for workflow tool nodes; no artifacts needed.",
+			mapData,
+			sdk.WithConfigSchema(cfg...), sdk.WithTimeout(120)),
 	}
 }
 
@@ -121,7 +125,7 @@ func transform(ctx context.Context, p TransformParams, tc *sdk.ToolContext) (*sd
 	if len(inputs) == 1 {
 		inFmt = inputs[0].format
 	}
-	full := buildScript(script, inputs, inFmt, outFmt)
+	full := buildScript(script, inputs, len(inputs) > 1, inFmt, outFmt)
 	if hasHeader(script) {
 		if f := scriptOutputFormat(full); f != "" && (p.OutputFormat == nil || strings.TrimSpace(*p.OutputFormat) == "") {
 			outFmt = f
@@ -260,7 +264,7 @@ func createTransformer(ctx context.Context, p CreateTransformerParams, tc *sdk.T
 			return sdk.Error(err.Error(), sdk.WithErrorCode("INVALID_ARGUMENTS")), nil
 		}
 	}
-	full := buildScript(p.Script, nil, inFmt, outFmt)
+	full := buildScript(p.Script, nil, false, inFmt, outFmt)
 	if f := scriptOutputFormat(full); f != "" {
 		outFmt = f
 	}

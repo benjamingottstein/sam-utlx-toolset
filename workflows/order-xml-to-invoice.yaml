@@ -1,0 +1,42 @@
+# Deterministic mapping workflow: one tool node runs a fixed UTL-X script.
+# No agent and no LLM are involved; the same input always gives the same output.
+kind: workflow
+name: order-xml-to-invoice
+description: "Maps an order given as XML text into an invoice JSON object with line totals, using a fixed UTL-X script in a tool node."
+spec:
+  appConfig:
+    description: Order XML to invoice JSON (UTL-X tool node).
+    toolsets:
+      - utlx
+    input_schema:
+      type: object
+      properties:
+        order_xml:
+          type: string
+          description: The order as XML text.
+      required: [order_xml]
+    nodes:
+      - id: map_order
+        type: tool
+        tool_name: utlx__utlx_map
+        input:
+          data: "{{workflow.input.order_xml}}"
+          input_format: xml
+          output_format: json
+          script: |
+            {
+              invoiceId: "INV-" + $input.Order.@id,
+              date: $input.Order.@date,
+              customer: $input.Order.Customer,
+              lines: $input.Order.Item |> map(i => {
+                sku: i.@sku,
+                qty: parseNumber(i.@qty),
+                unitPrice: parseNumber(i.@price),
+                total: parseNumber(i.@qty) * parseNumber(i.@price)
+              }),
+              grandTotal: sum($input.Order.Item |> map(i => parseNumber(i.@qty) * parseNumber(i.@price)))
+            }
+    output_mapping:
+      # A tool node's output is the tool result ({status, message, output, output_format});
+      # .output.output is the mapped value itself.
+      invoice: "{{map_order.output.output}}"

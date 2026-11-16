@@ -202,3 +202,71 @@ func TestFunctionsLookup(t *testing.T) {
 	r = h.call("utlx_functions", map[string]any{"query": "date"}, nil)
 	mustSucceed(t, r)
 }
+
+func TestMapJSONObjectToJSON(t *testing.T) {
+	h := newHarness(t)
+	r := h.call("utlx_map", map[string]any{
+		"script": `{customer: upper($input.name), total: sum($input.items |> map(i => i.qty * i.price))}`,
+		"data":   map[string]any{"name": "ann", "items": []any{map[string]any{"qty": 2, "price": 9.5}, map[string]any{"qty": 1, "price": 20}}},
+	}, nil)
+	mustSucceed(t, r)
+	out := r["data"].(map[string]any)["output"].(map[string]any)
+	if out["customer"] != "ANN" || out["total"].(float64) != 39 {
+		t.Fatalf("unexpected output: %v", out)
+	}
+}
+
+func TestMapXMLTextToCSV(t *testing.T) {
+	h := newHarness(t)
+	r := h.call("utlx_map", map[string]any{
+		"script":        `$input.Order.Item |> map(i => {sku: i.@sku, qty: parseNumber(i.@qty)})`,
+		"data":          orderXML,
+		"input_format":  "xml",
+		"output_format": "csv",
+	}, nil)
+	mustSucceed(t, r)
+	out := r["data"].(map[string]any)["output"].(string)
+	if !strings.Contains(out, "sku") || !strings.Contains(out, "A,2") {
+		t.Fatalf("unexpected CSV: %q", out)
+	}
+}
+
+func TestMapNamedInputs(t *testing.T) {
+	h := newHarness(t)
+	r := h.call("utlx_map", map[string]any{
+		"script": `$orders |> map(o => {id: o.id, customer: ($customers |> filter(c => toString(c.id) == toString(o.c)) |> first()).name})`,
+		"inputs": map[string]any{
+			"orders":    []any{map[string]any{"id": 1, "c": 7}},
+			"customers": "id,name\n7,Ann\n",
+		},
+		"input_formats":    map[string]any{"customers": "csv"},
+		"save_as_artifact": "joined.json",
+	}, nil)
+	mustSucceed(t, r)
+	arr := r["data"].(map[string]any)["output"].([]any)
+	if arr[0].(map[string]any)["customer"] != "Ann" {
+		t.Fatalf("unexpected join: %v", arr)
+	}
+	if !strings.Contains(h.output("joined.json"), "Ann") {
+		t.Fatal("artifact not saved")
+	}
+	// A single named input must still be reachable as $name.
+	r = h.call("utlx_map", map[string]any{
+		"script": `{n: count($orders)}`,
+		"inputs": map[string]any{"orders": []any{1, 2, 3}},
+	}, nil)
+	mustSucceed(t, r)
+	if r["data"].(map[string]any)["output"].(map[string]any)["n"].(float64) != 3 {
+		t.Fatalf("unexpected: %v", r["data"])
+	}
+}
+
+func TestMapErrors(t *testing.T) {
+	h := newHarness(t)
+	if r := h.call("utlx_map", map[string]any{"script": "{a: 1}"}, nil); r["status"] != "error" {
+		t.Fatalf("missing data should fail: %v", r)
+	}
+	if r := h.call("utlx_map", map[string]any{"script": "{a: (", "data": map[string]any{}}, nil); r["status"] != "error" {
+		t.Fatalf("bad script should fail: %v", r)
+	}
+}
