@@ -46,7 +46,8 @@ The Go binary validates arguments, writes the input artifacts to a scratch direc
 |---|---|---|
 | `linux/amd64` | `utlx-linux-x64` (release) | Needs a glibc-based STR image (the binary is dynamically linked) |
 | `darwin/arm64` | `utlx-macos-arm64` (release) | SAM desktop app on Apple Silicon |
-| `linux/arm64` | none published | Build it with [`toolsets/utlx/tools/build-utlx-linux-arm64.sh`](toolsets/utlx/tools/build-utlx-linux-arm64.sh) (GraalVM in a container) and pass `UTLX_BINARY` |
+| `windows/amd64` | `utlx-windows-x64.exe` (release) | SAM desktop app on Windows; bundled as `utlx.exe` + `bin\utlx.exe` |
+| `linux/arm64` | none published | Build it with [`build-utlx-linux-arm64.sh`](toolsets/utlx/tools/build-utlx-linux-arm64.sh) or [`.ps1`](toolsets/utlx/tools/build-utlx-linux-arm64.ps1) (GraalVM in a container) and pass `UTLX_BINARY` |
 
 Find out what your platform expects:
 
@@ -110,7 +111,31 @@ For linux/arm64, build utl-x first, then package with your binary:
 UTLX_BINARY=$PWD/toolsets/utlx/tools/out/utlx-linux-arm64 SAM_TOOL_TARGET_OS=linux SAM_TOOL_TARGET_ARCH=arm64 sam toolset package utlx
 ```
 
-Or apply declaratively. Copy `manifests/desktop.yaml`, set `target.url` and `target.auth`, and run `sam config apply -m <your manifest>`. Then attach the `utlx` toolset to any agent, or use `agents/data-transformer.yaml`.
+### Windows
+
+Everything works from a Windows machine too: the SAM CLI runs `build.bat` instead of `build.sh`, with the same options (`UTLX_BINARY`, `UTLX_VERSION`, `UTLX_SHA256`, `UTLX_SKIP_BINARY`). It downloads utl-x with `curl.exe` (Windows 10 and later). Run the commands above in PowerShell or `cmd`, or under WSL with `build.sh`.
+
+To use the toolset in the SAM desktop app on Windows, apply `manifests/desktop.yaml` as shown above. The Windows desktop app runs on x64, so its Secure Tool Runtime should report `windows/amd64` (check with `sam toolset build-target --target desktop`), and the bundle then gets `utlx.exe` and `bin\utlx.exe`. To build a Windows bundle from macOS or Linux:
+
+```bash
+SAM_TOOL_TARGET_OS=windows SAM_TOOL_TARGET_ARCH=amd64 sam toolset package utlx
+```
+
+Integration tests on Windows (PowerShell):
+
+```powershell
+cd toolsets\utlx\src; $env:UTLX_BIN = "C:\path\to\utlx-windows-x64.exe"; go test ./...
+```
+
+For a linux/arm64 platform, build utl-x with Docker Desktop or Podman:
+
+```powershell
+.\toolsets\utlx\tools\build-utlx-linux-arm64.ps1
+```
+
+### Apply to a platform
+
+Instead of uploading the bundle, you can apply it declaratively. Copy `manifests/desktop.yaml`, set `target.url` and `target.auth`, and run `sam config apply -m <your manifest>`. Then attach the `utlx` toolset to any agent, or use `agents/data-transformer.yaml`.
 
 The bundle is about 35 MB zipped and 100 MB unpacked, within SAM's upload limits (50 MB zipped, 250 MB unpacked).
 

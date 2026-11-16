@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -98,8 +99,16 @@ func formatFromFilename(name string) string {
 	return ""
 }
 
+// bundledNames are the file names build.sh/build.bat give the bundled CLI.
+func bundledNames() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"utlx.exe", "utlx"}
+	}
+	return []string{"utlx"}
+}
+
 // locateUtlx finds the utl-x binary: tool config "utlx_path", then bin/utlx
-// next to this tool binary (where build.sh puts it), then $PATH.
+// (bin\utlx.exe on Windows) next to this tool binary, then $PATH.
 func locateUtlx(tc *sdk.ToolContext) (string, error) {
 	if tc != nil {
 		if p := strings.TrimSpace(tc.GetConfigString("utlx_path", "")); p != "" {
@@ -107,15 +116,17 @@ func locateUtlx(tc *sdk.ToolContext) (string, error) {
 		}
 	}
 	if exe, err := os.Executable(); err == nil {
-		cand := filepath.Join(filepath.Dir(exe), "bin", "utlx")
-		if st, err := os.Stat(cand); err == nil && !st.IsDir() {
-			return cand, nil
+		for _, n := range bundledNames() {
+			cand := filepath.Join(filepath.Dir(exe), "bin", n)
+			if st, err := os.Stat(cand); err == nil && !st.IsDir() {
+				return cand, nil
+			}
 		}
 	}
 	if p, err := exec.LookPath("utlx"); err == nil {
 		return p, nil
 	}
-	return "", errors.New("utl-x binary not found: expected bin/utlx next to the tool binary, on PATH, or set the utlx_path tool config")
+	return "", errors.New("utl-x binary not found: expected bin/utlx (bin\\utlx.exe on Windows) next to the tool binary, on PATH, or set the utlx_path tool config")
 }
 
 // workspace is a per-call scratch directory under the sandbox TMPDIR.

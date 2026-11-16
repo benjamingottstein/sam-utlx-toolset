@@ -11,7 +11,8 @@
 #   UTLX_BINARY=/path/to/utlx   use this binary (it must match the target)
 #   otherwise                    download the utl-x release for the target:
 #                                  linux/amd64  -> utlx-linux-x64
-#                                  darwin/arm64 -> utlx-macos-arm64 (host validate only)
+#                                  darwin/arm64 -> utlx-macos-arm64 (SAM desktop on Apple Silicon)
+#                                  windows/amd64 -> utlx-windows-x64.exe (SAM desktop on Windows)
 #                                linux/arm64 has no release binary: build one with
 #                                ../tools/build-utlx-linux-arm64.sh and pass UTLX_BINARY.
 #   UTLX_VERSION                 release tag without "v" (default 1.3.1)
@@ -30,11 +31,16 @@ UTLX_VERSION="${UTLX_VERSION:-1.3.1}"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE_DIR="${UTLX_CACHE_DIR:-$SRC_DIR/../.sam-cache/utlx}"
 
+# Windows executables need the .exe suffix; the STR resolves the manifest's
+# extensionless executable name to <name>.exe there (same as SAM's built-in tools).
+EXE=""
+[[ "$TARGET_OS" == "windows" ]] && EXE=".exe"
+
 mkdir -p "$OUT_DIR"
 
 # 1. The Go tool binary.
 CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" \
-  go build -trimpath -buildvcs=false -o "$OUT_DIR/$NAME" .
+  go build -trimpath -buildvcs=false -o "$OUT_DIR/$NAME$EXE" .
 
 # 2. The manifest, so the STR can discover the tools.
 cp manifest.yaml "$OUT_DIR/manifest.yaml"
@@ -53,6 +59,7 @@ else
   case "$TARGET_OS/$TARGET_ARCH" in
     linux/amd64)  asset="utlx-linux-x64" ;;
     darwin/arm64) asset="utlx-macos-arm64" ;;
+    windows/amd64) asset="utlx-windows-x64.exe" ;;
     *)
       cat >&2 <<EOF
 build.sh: utl-x $UTLX_VERSION has no release binary for $TARGET_OS/$TARGET_ARCH.
@@ -78,5 +85,5 @@ if [[ -n "${UTLX_SHA256:-}" ]]; then
 fi
 
 mkdir -p "$OUT_DIR/bin"
-cp "$src" "$OUT_DIR/bin/utlx"
-chmod 0755 "$OUT_DIR/bin/utlx"
+cp "$src" "$OUT_DIR/bin/utlx$EXE"
+chmod 0755 "$OUT_DIR/bin/utlx$EXE"
