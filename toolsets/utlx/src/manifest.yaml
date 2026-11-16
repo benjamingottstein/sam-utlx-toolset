@@ -1,0 +1,7 @@
+version: 1
+tools:
+  utlx_tools:
+    runtime: go
+    executable: ./utlx          # Go tool binary; it runs ./bin/utlx (the utl-x CLI)
+    timeout_seconds: 120
+    sandbox_profile: standard   # no network needed: utl-x runs fully offline

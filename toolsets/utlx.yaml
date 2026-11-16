@@ -1,0 +1,3 @@
+kind: toolset
+name: utlx
+description: "Create and run UTL-X transformers between JSON, XML, CSV, YAML, OData and schema formats (XSD, JSON Schema, Avro, Protobuf, OData/EDMX, Table Schema)."

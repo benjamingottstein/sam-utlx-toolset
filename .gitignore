@@ -1,0 +1,21 @@
+# Build output and caches (sam toolset build pipeline, build.sh downloads)
+dist/
+.sam-cache/
+*.zip
+toolsets/utlx/src/utlx
+toolsets/utlx/tools/out/
+
+# Vendored Agent Mesh tool SDK: regenerate with `sam toolset sync`
+_sdk/
+
+# Local env / secrets
+.env
+.env.*
+.DS_Store
+
+# Added by sam config — per-toolset build cache and outputs.
+toolsets/*/.sam-cache/
+toolsets/*/dist/
+toolsets/*/src/vendor/
+skills/*/.sam-cache/
+skills/*/tools/*/dist/

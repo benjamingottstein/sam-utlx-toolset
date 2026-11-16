@@ -1,0 +1,13 @@
+# Applies the toolset and the example agent to the local Agent Mesh desktop app.
+#   sam config plan  -m manifests/desktop.yaml
+#   sam config apply -m manifests/desktop.yaml
+kind: manifest
+name: utlx-desktop
+description: UTL-X toolset and example agent on the local Agent Mesh desktop app
+target:
+  name: desktop
+resources:
+  toolsets:
+    - utlx
+  agents:
+    - data-transformer
